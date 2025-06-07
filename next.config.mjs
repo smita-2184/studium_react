@@ -10,7 +10,8 @@ const nextConfig = {
     unoptimized: true,
   },
   webpack: (config) => {
-    config.externals.push('canvas');
+    // This is the definitive fix for the "canvas.node" error on Vercel.
+    config.resolve.alias.canvas = false;
     return config;
   },
 }
