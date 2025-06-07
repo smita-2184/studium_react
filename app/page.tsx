@@ -9,6 +9,8 @@ import {
   GraduationCap,
   ChevronDown,
   PanelLeftOpen,
+  PanelRightOpen,
+  X,
   Search,
   Sun,
   RotateCcw,
@@ -54,6 +56,8 @@ export default function Home() {
   const [selectedPdf, setSelectedPdf] = useState<File | null>(null);
   const [canvasMode, setCanvasMode] = useState(false);
   const [blankCanvasActive, setBlankCanvasActive] = useState(false);
+  const [leftSidebarOpen, setLeftSidebarOpen] = useState(false);
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const pdfViewerContainerRef = useRef<HTMLDivElement>(null);
   const [viewerSize, setViewerSize] = useState({ width: 0, height: 0 });
 
@@ -92,52 +96,84 @@ export default function Home() {
   return (
     <div className="flex flex-col h-screen bg-zinc-950 text-zinc-50">
       {/* Global Header */}
-      <header className="flex items-center justify-between p-3 border-b border-zinc-800 bg-zinc-900 sticky top-0 z-10">
-        <div className="w-72"></div>
-        <div className="flex-1 text-center text-sm text-zinc-400">
-          {selectedPdf ? selectedPdf.name : 'Upload a PDF to get started'}
-        </div>
-        <div className="flex items-center space-x-3 w-72 justify-end">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
+      <header className="flex items-center justify-between p-3 border-b border-zinc-800 bg-zinc-900 sticky top-0 z-30">
+        <div className="flex items-center space-x-2">
+            <Button
                 variant="ghost"
-                size="sm"
-                className="flex items-center space-x-1 text-zinc-400 hover:text-zinc-100"
-              >
-                <Globe className="w-4 h-4" />
-                <span>US GB</span>
-                <ChevronDown className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-zinc-800 border-zinc-700 text-zinc-50">
-              <DropdownMenuItem className="hover:bg-zinc-700">US English</DropdownMenuItem>
-              <DropdownMenuItem className="hover:bg-zinc-700">UK English</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button variant="secondary" className="bg-white text-zinc-900 hover:bg-zinc-200 h-9">
-            Sign in
-          </Button>
+                size="icon"
+                className="text-zinc-400 hover:text-zinc-100 md:hidden"
+                onClick={() => setLeftSidebarOpen(true)}
+            >
+                <PanelLeftOpen className="w-5 h-5" />
+            </Button>
+            <div className="hidden md:block w-72"></div>
+        </div>
+
+        <div className="flex-1 text-center text-sm text-zinc-400 truncate px-2">
+          {selectedPdf ? selectedPdf.name : blankCanvasActive ? "Blank Canvas" : 'Upload a PDF to get started'}
+        </div>
+
+        <div className="flex items-center justify-end space-x-2 w-72">
+            <div className="hidden md:flex items-center space-x-3">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="flex items-center space-x-1 text-zinc-400 hover:text-zinc-100"
+                    >
+                      <Globe className="w-4 h-4" />
+                      <span>US GB</span>
+                      <ChevronDown className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="bg-zinc-800 border-zinc-700 text-zinc-50">
+                    <DropdownMenuItem className="hover:bg-zinc-700">US English</DropdownMenuItem>
+                    <DropdownMenuItem className="hover:bg-zinc-700">UK English</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button variant="secondary" className="bg-white text-zinc-900 hover:bg-zinc-200 h-9">
+                  Sign in
+                </Button>
+            </div>
+            <Button
+                variant="ghost"
+                size="icon"
+                className="text-zinc-400 hover:text-zinc-100 md:hidden"
+                onClick={() => setRightSidebarOpen(true)}
+            >
+                <PanelRightOpen className="w-5 h-5" />
+            </Button>
         </div>
       </header>
 
       <main className="flex flex-1 overflow-hidden">
         {/* Left Sidebar */}
-        <aside className="w-72 p-5 bg-zinc-900 border-r border-zinc-800 flex flex-col space-y-6">
-          <div className="flex items-center space-x-2 cursor-pointer" onClick={handleGoHome}>
-            <GraduationCap className="w-8 h-8 text-white" />
-            <h1 className="text-2xl font-semibold text-white">YouLearn</h1>
+        <aside className={`absolute md:relative w-72 p-5 bg-zinc-900 border-r border-zinc-800 flex-col space-y-6 z-20 h-full transform transition-transform duration-300 ease-in-out md:translate-x-0 ${leftSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:flex`}>
+          <div className="flex justify-between items-center">
+            <div className="flex items-center space-x-2 cursor-pointer" onClick={handleGoHome}>
+                <GraduationCap className="w-8 h-8 text-white" />
+                <h1 className="text-2xl font-semibold text-white">YouLearn</h1>
+            </div>
+            <Button
+                variant="ghost"
+                size="icon"
+                className="text-zinc-400 hover:text-zinc-100 md:hidden"
+                onClick={() => setLeftSidebarOpen(false)}
+            >
+                <X className="w-5 h-5" />
+            </Button>
           </div>
           <Button 
             className="w-full justify-start text-left bg-zinc-800 hover:bg-zinc-700 text-white h-10"
-            onClick={() => setShowUploader(true)}
+            onClick={() => { setShowUploader(true); setLeftSidebarOpen(false); }}
           >
             <Plus className="w-4 h-4 mr-2" />
             Add content
           </Button>
           <Button
             className="w-full justify-start text-left bg-zinc-800 hover:bg-zinc-700 text-white h-10"
-            onClick={handleBlankCanvasClick}
+            onClick={() => { handleBlankCanvasClick(); setLeftSidebarOpen(false); }}
           >
             <PenSquare className="w-4 h-4 mr-2" />
             Blank Canvas
@@ -244,22 +280,32 @@ export default function Home() {
         </section>
 
         {/* Right Sidebar (Chat Panel) */}
-        <aside className="w-[400px] bg-zinc-900 border-l border-zinc-800 flex flex-col">
-          <div className="p-3 border-b border-zinc-800 flex items-center space-x-1">
-            <Button variant="ghost" size="icon" className="text-zinc-400 hover:text-zinc-100">
-              <ChevronLeft className="w-5 h-5" />
-            </Button>
-            <Button variant="ghost" className="bg-zinc-800 text-white hover:bg-zinc-700 h-9 px-3">
-              <MessageCircle className="w-4 h-4 mr-2" /> Chat
-            </Button>
-            <Button variant="ghost" className="text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 h-9 px-3">
-              <Copy className="w-4 h-4 mr-2" /> Flashcards
-            </Button>
-            <Button variant="ghost" className="text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 h-9 px-3">
-              <ClipboardCheck className="w-4 h-4 mr-2" /> Quizzes
-            </Button>
-            <Button variant="ghost" className="text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 h-9 px-3">
-              <AlignLeft className="w-4 h-4 mr-2" /> Summary
+        <aside className={`absolute md:relative w-full md:w-[400px] bg-zinc-900 border-l border-zinc-800 flex-col z-20 h-full transform transition-transform duration-300 ease-in-out right-0 md:translate-x-0 ${rightSidebarOpen ? 'translate-x-0' : 'translate-x-full'} md:flex`}>
+          <div className="p-3 border-b border-zinc-800 flex items-center justify-between space-x-1">
+            <div className="flex items-center space-x-1">
+              <Button variant="ghost" size="icon" className="text-zinc-400 hover:text-zinc-100">
+                <ChevronLeft className="w-5 h-5" />
+              </Button>
+              <Button variant="ghost" className="bg-zinc-800 text-white hover:bg-zinc-700 h-9 px-3">
+                <MessageCircle className="w-4 h-4 mr-2" /> Chat
+              </Button>
+              <Button variant="ghost" className="text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 h-9 px-3">
+                <Copy className="w-4 h-4 mr-2" /> Flashcards
+              </Button>
+              <Button variant="ghost" className="text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 h-9 px-3 hidden sm:flex">
+                <ClipboardCheck className="w-4 h-4 mr-2" /> Quizzes
+              </Button>
+              <Button variant="ghost" className="text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 h-9 px-3 hidden lg:flex">
+                <AlignLeft className="w-4 h-4 mr-2" /> Summary
+              </Button>
+            </div>
+            <Button
+                variant="ghost"
+                size="icon"
+                className="text-zinc-400 hover:text-zinc-100 md:hidden"
+                onClick={() => setRightSidebarOpen(false)}
+            >
+                <X className="w-5 h-5" />
             </Button>
           </div>
 

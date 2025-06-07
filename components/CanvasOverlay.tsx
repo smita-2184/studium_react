@@ -25,10 +25,13 @@ export const CanvasOverlay: React.FC<CanvasOverlayProps> = ({ width, height }) =
     const stage = e.target.getStage();
     const point = stage.getPointerPosition();
     let lastLine = lines[lines.length - 1];
-    lastLine.points = lastLine.points.concat([point.x, point.y]);
-
-    lines.splice(lines.length - 1, 1, lastLine);
-    setLines(lines.concat());
+    
+    // Check if lastLine is defined
+    if (lastLine) {
+        lastLine.points = lastLine.points.concat([point.x, point.y]);
+        lines.splice(lines.length - 1, 1, lastLine);
+        setLines(lines.concat());
+    }
   };
 
   const handleMouseUp = () => {
@@ -42,6 +45,9 @@ export const CanvasOverlay: React.FC<CanvasOverlayProps> = ({ width, height }) =
       onMouseDown={handleMouseDown}
       onMousemove={handleMouseMove}
       onMouseup={handleMouseUp}
+      onTouchStart={handleMouseDown}
+      onTouchMove={handleMouseMove}
+      onTouchEnd={handleMouseUp}
       className="absolute top-0 left-0"
     >
       <Layer>
