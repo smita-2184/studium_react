@@ -9,7 +9,7 @@ import { SimpleLatexRenderer } from '../components/SimpleLatexRenderer';
 import { GeoGebraGraph } from '../components/GeoGebraGraph';
 import { SimpleGeoGebraGraph } from '../components/SimpleGeoGebraGraph';
 import { EmbeddedGeoGebra } from '../components/EmbeddedGeoGebra';
-import { VoiceChat } from '../components/VoiceChat';
+import { SimpleVoiceChat } from '../components/SimpleVoiceChat';
 import { useWindowDimensions } from '../hooks/useWindowDimensions';
 import dynamic from 'next/dynamic';
 
@@ -732,7 +732,7 @@ const Home = () => {
                 <Chat userId={user.uid} />
               ) : activeTab === 'voice' ? (
                 <div className="flex-1 flex flex-col p-4">
-                  <VoiceChat 
+                  <SimpleVoiceChat 
                     onTranscriptUpdate={(transcript, isUser) => {
                       // Optionally sync voice transcripts with chat
                       console.log(`${isUser ? 'User' : 'AI'}: ${transcript}`);
