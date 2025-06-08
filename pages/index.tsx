@@ -6,6 +6,7 @@ import { PdfViewer } from '../components/PdfViewer';
 import { PdfUploader } from '../components/PdfUploader';
 import { LaTeXRenderer } from '../components/LaTeXRenderer';
 import { SimpleLatexRenderer } from '../components/SimpleLatexRenderer';
+import { GeoGebraGraph } from '../components/GeoGebraGraph';
 import { useWindowDimensions } from '../hooks/useWindowDimensions';
 import dynamic from 'next/dynamic';
 
@@ -46,6 +47,7 @@ import {
   FileText,
   Eraser,
   Calculator,
+  BarChart3,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -59,10 +61,11 @@ const Home = () => {
   const [authError, setAuthError] = useState<string>('');
   const [selectedPdf, setSelectedPdf] = useState<File | null>(null);
   const [showCanvas, setShowCanvas] = useState(false);
-  const [activeTab, setActiveTab] = useState<'chat' | 'flashcards' | 'quizzes' | 'summary' | 'equations'>('chat');
+  const [activeTab, setActiveTab] = useState<'chat' | 'flashcards' | 'quizzes' | 'summary' | 'equations' | 'graphs'>('chat');
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
   const [extractedEquations, setExtractedEquations] = useState<string[]>([]);
+  const [geogebraGraphs, setGeogebraGraphs] = useState<{equation: string, geogebraEquation: string}[]>([]);
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   useEffect(() => {
@@ -287,6 +290,87 @@ const Home = () => {
       const errorNotification = document.createElement('div');
       errorNotification.className = 'fixed top-4 right-4 bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg z-50';
       errorNotification.textContent = '❌ Error extracting equations';
+      document.body.appendChild(errorNotification);
+      
+      setTimeout(() => {
+        if (document.body.contains(errorNotification)) {
+          document.body.removeChild(errorNotification);
+        }
+      }, 3000);
+    }
+  };
+
+  const handleConvertToGraph = async (equation: string) => {
+    try {
+      // Show a temporary notification
+      const notification = document.createElement('div');
+      notification.className = 'fixed top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+      notification.textContent = '📊 Converting to graph...';
+      document.body.appendChild(notification);
+      
+      // Send equation to API for GeoGebra conversion
+      const response = await fetch('/api/convert-to-geogebra', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          equation
+        }),
+      });
+
+      const result = await response.json();
+      
+      // Remove notification
+      document.body.removeChild(notification);
+      
+      if (result.success && result.geogebraEquation) {
+        // Add to graphs array
+        const newGraph = {
+          equation: equation,
+          geogebraEquation: result.geogebraEquation
+        };
+        
+        setGeogebraGraphs(prev => [...prev, newGraph]);
+        
+        // Switch to graphs tab (we'll create this)
+        setActiveTab('graphs');
+        
+        // Show success notification
+        const successNotification = document.createElement('div');
+        successNotification.className = 'fixed top-4 right-4 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+        successNotification.textContent = '✅ Graph created successfully!';
+        document.body.appendChild(successNotification);
+        
+        setTimeout(() => {
+          if (document.body.contains(successNotification)) {
+            document.body.removeChild(successNotification);
+          }
+        }, 3000);
+        
+        console.log('Equation converted to graph:', result.geogebraEquation);
+      } else {
+        // Show error notification
+        const errorNotification = document.createElement('div');
+        errorNotification.className = 'fixed top-4 right-4 bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+        errorNotification.textContent = '❌ Cannot convert this equation to graph';
+        document.body.appendChild(errorNotification);
+        
+        setTimeout(() => {
+          if (document.body.contains(errorNotification)) {
+            document.body.removeChild(errorNotification);
+          }
+        }, 3000);
+        
+        console.log('Cannot convert equation to graph:', result.error);
+      }
+    } catch (error) {
+      console.error('Error converting equation to graph:', error);
+      
+      // Show error notification
+      const errorNotification = document.createElement('div');
+      errorNotification.className = 'fixed top-4 right-4 bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+      errorNotification.textContent = '❌ Error converting to graph';
       document.body.appendChild(errorNotification);
       
       setTimeout(() => {
@@ -624,6 +708,13 @@ const Home = () => {
               >
                 <Calculator className="w-4 h-4 mr-2" /> Equations
               </Button>
+              <Button 
+                variant="ghost" 
+                className={`h-9 px-3 ${activeTab === 'graphs' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800'}`}
+                onClick={() => setActiveTab('graphs')}
+              >
+                <BarChart3 className="w-4 h-4 mr-2" /> Graphs
+              </Button>
             </div>
 
             <div className="flex-1 flex flex-col">
@@ -668,26 +759,38 @@ const Home = () => {
                         <div key={index} className="bg-zinc-800 rounded-lg p-4 border border-zinc-700">
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-xs text-zinc-500">Equation {index + 1}</span>
-                            <Button
-                              onClick={() => {
-                                navigator.clipboard.writeText(equation);
-                                // Show copy notification
-                                const notification = document.createElement('div');
-                                notification.className = 'fixed top-4 right-4 bg-green-600 text-white px-3 py-1 rounded text-sm z-50';
-                                notification.textContent = '📋 Copied!';
-                                document.body.appendChild(notification);
-                                setTimeout(() => {
-                                  if (document.body.contains(notification)) {
-                                    document.body.removeChild(notification);
-                                  }
-                                }, 2000);
-                              }}
-                              variant="ghost"
-                              size="sm"
-                              className="text-zinc-400 hover:text-zinc-200 h-6 w-6 p-0"
-                            >
-                              <Copy className="w-3 h-3" />
-                            </Button>
+                            <div className="flex space-x-1">
+                              <Button
+                                onClick={() => handleConvertToGraph(equation)}
+                                variant="ghost"
+                                size="sm"
+                                className="text-blue-400 hover:text-blue-200 h-6 w-6 p-0"
+                                title="Convert to Graph"
+                              >
+                                <BarChart3 className="w-3 h-3" />
+                              </Button>
+                              <Button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(equation);
+                                  // Show copy notification
+                                  const notification = document.createElement('div');
+                                  notification.className = 'fixed top-4 right-4 bg-green-600 text-white px-3 py-1 rounded text-sm z-50';
+                                  notification.textContent = '📋 Copied!';
+                                  document.body.appendChild(notification);
+                                  setTimeout(() => {
+                                    if (document.body.contains(notification)) {
+                                      document.body.removeChild(notification);
+                                    }
+                                  }, 2000);
+                                }}
+                                variant="ghost"
+                                size="sm"
+                                className="text-zinc-400 hover:text-zinc-200 h-6 w-6 p-0"
+                                title="Copy LaTeX"
+                              >
+                                <Copy className="w-3 h-3" />
+                              </Button>
+                            </div>
                           </div>
                           
                           {/* LaTeX Rendered Equation */}
@@ -716,6 +819,82 @@ const Home = () => {
                         <p>• Handwritten equations</p>
                         <p>• Mathematical expressions</p>
                         <p>• Formulas and derivations</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : activeTab === 'graphs' ? (
+                <div className="flex-1 flex flex-col p-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-zinc-300">Mathematical Graphs</h3>
+                    <Button 
+                      onClick={() => setGeogebraGraphs([])}
+                      variant="outline"
+                      size="sm"
+                      className="border-zinc-600 text-zinc-400 hover:bg-zinc-700"
+                      disabled={geogebraGraphs.length === 0}
+                    >
+                      Clear All
+                    </Button>
+                  </div>
+                  
+                  {geogebraGraphs.length > 0 ? (
+                    <div className="space-y-6 flex-1 overflow-y-auto">
+                      {geogebraGraphs.map((graph, index) => (
+                        <div key={index} className="bg-zinc-800 rounded-lg p-4 border border-zinc-700">
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-sm text-zinc-400">Graph {index + 1}</span>
+                            <Button
+                              onClick={() => {
+                                setGeogebraGraphs(prev => prev.filter((_, i) => i !== index));
+                              }}
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-400 hover:text-red-200 h-6 w-6 p-0"
+                              title="Remove Graph"
+                            >
+                              ×
+                            </Button>
+                          </div>
+                          
+                          {/* Original LaTeX Equation */}
+                          <div className="mb-3">
+                            <div className="text-xs text-zinc-500 mb-1">Original Equation:</div>
+                            <div className="bg-zinc-900 rounded p-2 text-xs font-mono text-zinc-300">
+                              {graph.equation}
+                            </div>
+                          </div>
+                          
+                          {/* GeoGebra Graph */}
+                          <div className="bg-white rounded-lg p-2">
+                            <GeoGebraGraph 
+                              equation={graph.geogebraEquation}
+                              width={350}
+                              height={300}
+                            />
+                          </div>
+                          
+                          {/* GeoGebra Equation */}
+                          <div className="mt-3">
+                            <div className="text-xs text-zinc-500 mb-1">GeoGebra Format:</div>
+                            <div className="bg-zinc-900 rounded p-2 text-xs font-mono text-zinc-300">
+                              f(x) = {graph.geogebraEquation}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex-1 flex flex-col items-center justify-center space-y-4 text-zinc-400">
+                      <BarChart3 className="w-16 h-16 text-zinc-500" />
+                      <p className="text-lg font-medium text-zinc-300">No Graphs Yet</p>
+                      <p className="text-center text-sm">Extract equations first, then click the graph icon to create interactive graphs.</p>
+                      <div className="text-xs text-zinc-500 text-center">
+                        <p>Supported equation types:</p>
+                        <p>• Functions (y = x², sin(x), etc.)</p>
+                        <p>• Derivatives and integrals</p>
+                        <p>• Polynomial equations</p>
+                        <p>• Trigonometric functions</p>
                       </div>
                     </div>
                   )}
