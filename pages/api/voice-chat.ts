@@ -14,18 +14,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Enable streaming
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache, no-transform');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('Transfer-Encoding', 'chunked');
-
   try {
     const { audioData, language = 'en-US', voice = 'Kore', testMode = false, testText = '' } = req.body;
 
     if (!audioData && !testMode) {
-      res.write('data: ' + JSON.stringify({ error: 'No audio data provided' }) + '\n\n');
-      return res.end();
+      return res.status(400).json({ error: 'No audio data provided' });
     }
 
     console.log('Processing voice chat request...', testMode ? '(TEST MODE)' : '');
@@ -34,35 +27,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const apiKeyDoc = await getDoc(doc(db, 'api_keys', 'gemini'));
     if (!apiKeyDoc.exists()) {
       console.error('API key document not found');
-      res.write('data: ' + JSON.stringify({ error: 'API key not found' }) + '\n\n');
-      return res.end();
+      return res.status(500).json({ error: 'API key not found' });
     }
 
     const apiKey = apiKeyDoc.data().gemini;
     if (!apiKey) {
       console.error('API key not configured in document');
-      res.write('data: ' + JSON.stringify({ error: 'API key not configured' }) + '\n\n');
-      return res.end();
+      return res.status(500).json({ error: 'API key not configured' });
     }
 
     // Initialize Gemini AI
     const genAI = new GoogleGenerativeAI(apiKey);
 
     let userTranscript = '';
+    let aiResponse = '';
+    let audioResponseBase64: string | null = null;
 
     if (testMode) {
       // Test mode - skip transcription, use provided text
       console.log('Test mode - using provided text...');
       userTranscript = 'Test audio request';
-      res.write('data: ' + JSON.stringify({ userTranscript }) + '\n\n');
-      
-      const testResponse = testText || 'Hello! This is a test of the audio system. Can you hear me clearly?';
-      const words = testResponse.split(' ');
-      
-      for (const word of words) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        res.write('data: ' + JSON.stringify({ aiResponseChunk: word + ' ' }) + '\n\n');
-      }
+      aiResponse = testText || 'Hello! This is a test of the audio system. Can you hear me clearly?';
     } else {
       // Step 1: Transcribe the audio using Gemini 2.0 Flash
       console.log('Transcribing audio...');
@@ -87,13 +72,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       userTranscript = transcriptionResult.response.text().trim();
       console.log('User transcript:', userTranscript);
-      
-      // Send transcription immediately
-      res.write('data: ' + JSON.stringify({ userTranscript }) + '\n\n');
 
       if (!userTranscript) {
-        res.write('data: ' + JSON.stringify({ error: 'Could not transcribe audio' }) + '\n\n');
-        return res.end();
+        return res.status(400).json({ error: 'Could not transcribe audio' });
       }
 
       // Step 2: Generate AI response using Gemini 2.0 Flash
@@ -104,29 +85,75 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const result = await chatModel.generateContent(prompt);
       const response = await result.response;
-      const text = response.text();
-      
-      // Stream the response word by word to simulate streaming
-      const words = text.split(' ');
-      for (const word of words) {
-        res.write('data: ' + JSON.stringify({ aiResponseChunk: word + ' ' }) + '\n\n');
-        // Add a small delay between words to simulate natural typing
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
+      aiResponse = response.text().trim();
+      console.log('AI response:', aiResponse);
 
-      // Send completion signal with newline
-      res.write('data: ' + JSON.stringify({ done: true }) + '\n\n');
+      // === Step 3: Convert AI response text to speech ===
+      console.log('Generating TTS audio...');
+      try {
+        const ttsModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-tts" });
+
+        // Types may not include speechConfig yet, so cast to any
+        const ttsResult = await (ttsModel as any).generateContent({
+          contents: [{ parts: [{ text: aiResponse }] }],
+          config: {
+            responseModalities: ['AUDIO'],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: { voiceName: voice }
+              }
+            }
+          }
+        });
+
+        audioResponseBase64 = (ttsResult as any)?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
+        if (audioResponseBase64) {
+          console.log('TTS audio generated, length:', audioResponseBase64.length);
+        } else {
+          console.warn('TTS audio generation returned empty data');
+        }
+      } catch (ttsErr) {
+        console.error('TTS generation failed:', ttsErr);
+      }
     }
 
-    return res.end();
+    // If testMode (no audioData) but we still might want audio via TTS
+    if (testMode) {
+      try {
+        const ttsModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-tts" });
+        const ttsResult = await (ttsModel as any).generateContent({
+          contents: [{ parts: [{ text: aiResponse }] }],
+          config: {
+            responseModalities: ['AUDIO'],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: { voiceName: voice }
+              }
+            }
+          }
+        });
+        audioResponseBase64 = (ttsResult as any)?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
+      } catch (err) {
+        console.error('TTS testMode generation failed:', err);
+      }
+    }
+
+    console.log('Voice chat processing completed successfully');
+
+    return res.status(200).json({
+      success: true,
+      userTranscript,
+      aiResponse,
+      audioResponse: audioResponseBase64,
+      timestamp: new Date().toISOString()
+    });
 
   } catch (error: any) {
     console.error('Error in voice chat:', error);
-    res.write('data: ' + JSON.stringify({
+    return res.status(500).json({
       error: 'Voice chat processing failed',
       details: error.message
-    }) + '\n\n');
-    return res.end();
+    });
   }
 }
 

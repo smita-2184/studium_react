@@ -36,6 +36,20 @@ export const SimpleVoiceChat: React.FC<SimpleVoiceChatProps> = ({ onTranscriptUp
     'de-DE': ['Kore', 'Orus', 'Zephyr', 'Autonoe', 'Umbriel', 'Erinome']
   };
 
+  // ===== UI helpers =====
+  // Keep a reference to the chat container so we can auto-scroll to the bottom when messages update
+  const chatContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Auto-scroll whenever messages change
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
+  }, [qaPairs, currentQA]);
+
   // Initialize microphone
   const initializeMicrophone = async () => {
     try {
@@ -94,7 +108,7 @@ export const SimpleVoiceChat: React.FC<SimpleVoiceChatProps> = ({ onTranscriptUp
       // Convert audio to base64
       const base64Audio = await audioToBase64(audioBlob);
       
-      // Create EventSource for streaming response
+      // Send request to API
       const response = await fetch('/api/voice-chat', {
         method: 'POST',
         headers: {
@@ -107,74 +121,64 @@ export const SimpleVoiceChat: React.FC<SimpleVoiceChatProps> = ({ onTranscriptUp
         }),
       });
 
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('No response reader available');
-      }
+      const result = await response.json();
 
-      let currentAnswer = '';
-      const decoder = new TextDecoder();
+      if (result.success) {
+        // Create new Q&A pair
+        const newQA: QAPair = {
+          id: Date.now().toString(),
+          question: result.userTranscript,
+          answer: '',
+          isComplete: false,
+          timestamp: new Date()
+        };
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+        // Show question immediately
+        setCurrentQA(newQA);
+        onTranscriptUpdate?.(result.userTranscript, true);
+        console.log('User transcript updated:', result.userTranscript);
 
-        // Decode the chunk and split by double newlines (SSE format)
-        const chunk = decoder.decode(value);
-        const events = chunk.split('\n\n');
-
-        for (const event of events) {
-          if (!event.trim() || !event.startsWith('data: ')) continue;
-
-          try {
-            const data = JSON.parse(event.slice(5)); // Remove 'data: ' prefix
-
-            // Handle transcription update
-            if (data.userTranscript) {
-              const newQA: QAPair = {
-                id: Date.now().toString(),
-                question: data.userTranscript,
-                answer: '',
-                isComplete: false,
-                timestamp: new Date()
-              };
-              setCurrentQA(newQA);
-              onTranscriptUpdate?.(data.userTranscript, true);
-              console.log('User transcript updated:', data.userTranscript);
-            }
-
-            // Handle AI response streaming
-            if (data.aiResponseChunk) {
-              currentAnswer += data.aiResponseChunk;
-              if (currentQA) {
-                setCurrentQA(prev => prev ? { ...prev, answer: currentAnswer } : null);
-              }
-              onTranscriptUpdate?.(currentAnswer, false);
-            }
-
-            // Handle completion
-            if (data.done) {
-              if (currentQA) {
-                const completedQA = { ...currentQA, answer: currentAnswer, isComplete: true };
-                setQaPairs(prev => [...prev, completedQA]);
-                setCurrentQA(null);
-              }
-              currentAnswer = '';
-              console.log('Streaming completed');
-            }
-
-            // Handle errors
-            if (data.error) {
-              throw new Error(data.error + (data.details ? `: ${data.details}` : ''));
-            }
-          } catch (e) {
-            console.error('Error parsing SSE data:', e);
-          }
+        // Simulate streaming for better UX
+        const words = result.aiResponse.split(' ');
+        let currentAnswer = '';
+        
+        for (let i = 0; i < words.length; i++) {
+          currentAnswer += words[i] + ' ';
+          
+          // Update current Q&A with streaming answer
+          setCurrentQA(prev => prev ? { ...prev, answer: currentAnswer.trim() } : null);
+          onTranscriptUpdate?.(currentAnswer.trim(), false);
+          
+          // Add small delay between words for streaming effect
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
+
+        // Mark as complete and move to completed pairs
+        const completedQA: QAPair = {
+          ...newQA,
+          answer: result.aiResponse,
+          isComplete: true
+        };
+        
+        setQaPairs(prev => [...prev, completedQA]);
+        setCurrentQA(null);
+        
+        // Prefer server-generated audio if provided
+        if (result.audioResponse) {
+          await playAudioResponse(result.audioResponse);
+        } else {
+          // Fallback to browser TTS
+          speakText(result.aiResponse);
+        }
+        
+        console.log('Response completed:', result.aiResponse);
+      } else {
+        throw new Error(result.error || 'Unknown error occurred');
       }
 
     } catch (error: any) {
       console.error('Error processing audio:', error);
+      
       if (currentQA) {
         const errorQA = { ...currentQA, answer: `Error: ${error.message}`, isComplete: true };
         setQaPairs(prev => [...prev, errorQA]);
@@ -419,6 +423,32 @@ export const SimpleVoiceChat: React.FC<SimpleVoiceChatProps> = ({ onTranscriptUp
     }
   };
 
+  // ===== Speech Synthesis (browser TTS) =====
+  const speakText = (text: string) => {
+    if (isMuted || !text) return;
+    if (typeof window === 'undefined') return;
+
+    const synth = window.speechSynthesis;
+    // Cancel any ongoing speech
+    synth.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = selectedLanguage;
+
+    // Try to match a voice based on the selectedVoice label
+    const voices = synth.getVoices();
+    const match = voices.find((v) => v.name.toLowerCase().includes(selectedVoice.toLowerCase()));
+    if (match) {
+      utterance.voice = match;
+    } else {
+      // Fallback to first voice that matches language
+      const fallback = voices.find((v) => v.lang === selectedLanguage);
+      if (fallback) utterance.voice = fallback;
+    }
+
+    synth.speak(utterance);
+  };
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -432,193 +462,140 @@ export const SimpleVoiceChat: React.FC<SimpleVoiceChatProps> = ({ onTranscriptUp
   }, []);
 
   return (
-    <div className="bg-zinc-800 rounded-lg p-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-white">Voice Chat</h3>
+    <div className="relative flex flex-col max-h-[80vh] min-h-[400px] h-full bg-gradient-to-br from-zinc-800 via-zinc-800 to-zinc-900 rounded-xl shadow-lg overflow-hidden">
+      {/* Header */}
+      <div className="p-4 border-b border-zinc-700 flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-white flex items-center space-x-2">
+          <Mic className="w-5 h-5" />
+          <span>Voice Tutor</span>
+        </h3>
         <button
           onClick={() => setIsMuted(!isMuted)}
-          className={`p-2 rounded ${isMuted ? 'bg-red-600 hover:bg-red-700' : 'bg-zinc-600 hover:bg-zinc-700'} text-white`}
+          className={`p-2 rounded-full transition hover:scale-105 ${isMuted ? 'bg-red-600' : 'bg-zinc-600'}`}
+          title={isMuted ? 'Unmute responses' : 'Mute responses'}
         >
-          {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+          {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
         </button>
       </div>
 
-      {/* Language and Voice Selection */}
-      <div className="flex space-x-4">
-        <div className="flex-1">
-          <label className="block text-sm text-zinc-300 mb-1">Language</label>
-          <select
-            value={selectedLanguage}
-            onChange={(e) => setSelectedLanguage(e.target.value as 'en-US' | 'de-DE')}
-            className="w-full bg-zinc-700 text-white text-sm px-3 py-2 rounded border border-zinc-600"
-            disabled={isRecording || isProcessing}
-          >
-            <option value="en-US">🇺🇸 English</option>
-            <option value="de-DE">🇩🇪 Deutsch</option>
-          </select>
-        </div>
-        
-        <div className="flex-1">
-          <label className="block text-sm text-zinc-300 mb-1">Voice</label>
-          <select
-            value={selectedVoice}
-            onChange={(e) => setSelectedVoice(e.target.value)}
-            className="w-full bg-zinc-700 text-white text-sm px-3 py-2 rounded border border-zinc-600"
-            disabled={isRecording || isProcessing}
-          >
-            {voiceOptions[selectedLanguage].map(voice => (
-              <option key={voice} value={voice}>{voice}</option>
-            ))}
-          </select>
-        </div>
+      {/* Settings */}
+      <div className="px-4 pt-4 grid grid-cols-2 gap-4">
+        <select
+          value={selectedLanguage}
+          onChange={(e) => setSelectedLanguage(e.target.value as 'en-US' | 'de-DE')}
+          className="bg-zinc-700 text-white text-sm px-3 py-2 rounded border border-zinc-600 focus:outline-none"
+          disabled={isRecording || isProcessing}
+          title="Select language"
+        >
+          <option value="en-US">🇺🇸 English</option>
+          <option value="de-DE">🇩🇪 Deutsch</option>
+        </select>
+        <select
+          value={selectedVoice}
+          onChange={(e) => setSelectedVoice(e.target.value)}
+          className="bg-zinc-700 text-white text-sm px-3 py-2 rounded border border-zinc-600 focus:outline-none"
+          disabled={isRecording || isProcessing}
+          title="Select AI voice"
+        >
+          {voiceOptions[selectedLanguage].map((voice) => (
+            <option key={voice} value={voice}>
+              {voice}
+            </option>
+          ))}
+        </select>
       </div>
 
-      {/* Recording Controls */}
-      <div className="flex items-center justify-center space-x-4">
+      {/* Conversation */}
+      <div
+        ref={chatContainerRef}
+        className="flex-1 overflow-y-auto px-4 py-4 space-y-6 scrollbar-thin scrollbar-thumb-zinc-600"
+      >
+        {qaPairs.length === 0 && !currentQA && (
+          <div className="flex flex-col items-center justify-center h-full text-zinc-500">
+            <Mic size={32} className="mb-2 opacity-50" />
+            <p className="text-sm">Hold the mic button to start chatting</p>
+          </div>
+        )}
+        {qaPairs.map((qa) => (
+          <div key={qa.id} className="space-y-2">
+            {/* User bubble */}
+            <div className="flex justify-end">
+              <div className="bg-blue-600 text-white rounded-lg px-4 py-2 max-w-xs shadow">
+                <p className="text-sm">{qa.question}</p>
+                <span className="block text-[10px] opacity-70 text-right mt-1">
+                  {qa.timestamp.toLocaleTimeString()}
+                </span>
+              </div>
+            </div>
+            {/* AI bubble */}
+            <div className="flex">
+              <div className="bg-zinc-700 text-white rounded-lg px-4 py-2 max-w-xs shadow">
+                <p className="text-sm">{qa.answer}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {currentQA && (
+          <div className="space-y-2">
+            {/* User question (fixed) */}
+            <div className="flex justify-end">
+              <div className="bg-blue-600 text-white rounded-lg px-4 py-2 max-w-xs shadow">
+                <p className="text-sm">{currentQA.question}</p>
+              </div>
+            </div>
+            {/* AI typing */}
+            <div className="flex">
+              <div className="bg-zinc-700 text-white rounded-lg px-4 py-2 max-w-xs shadow flex items-center space-x-1">
+                <p className="text-sm">{currentQA.answer}</p>
+                <span className="animate-pulse">|</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Footer controls */}
+      <div className="p-4 border-t border-zinc-700 flex items-center justify-center space-x-4 bg-zinc-800/50 backdrop-blur-sm">
+        {isPlaying && (
+          <button
+            onClick={stopAudio}
+            className="w-10 h-10 flex items-center justify-center rounded-full bg-orange-600 hover:bg-orange-700 text-white transition"
+            title="Stop audio playback"
+          >
+            <Square size={18} />
+          </button>
+        )}
+
         <button
           onMouseDown={startRecording}
           onMouseUp={stopRecording}
           onTouchStart={startRecording}
           onTouchEnd={stopRecording}
-          className={`flex items-center space-x-2 px-6 py-3 rounded-full ${
-            isRecording 
-              ? 'bg-red-600 hover:bg-red-700 animate-pulse' 
-              : 'bg-blue-600 hover:bg-blue-700'
-          } text-white font-medium`}
+          className={`w-16 h-16 rounded-full flex items-center justify-center text-white shadow-lg transition transform hover:scale-105 ${
+            isRecording ? 'bg-red-600 animate-pulse' : 'bg-blue-600'
+          }`}
           disabled={isProcessing}
+          title={isRecording ? 'Release to send' : 'Hold to talk'}
         >
-          {isRecording ? <MicOff size={20} /> : <Mic size={20} />}
-          <span>
-            {isProcessing ? 'Processing...' : isRecording ? 'Release to Stop' : 'Hold to Talk'}
-          </span>
-        </button>
-
-        {isPlaying && (
-          <button
-            onClick={stopAudio}
-            className="flex items-center space-x-2 px-4 py-2 rounded bg-orange-600 hover:bg-orange-700 text-white"
-          >
-            <Square size={16} />
-            <span>Stop Audio</span>
-          </button>
-        )}
-
-        <button
-          onClick={testAudio}
-          className="flex items-center space-x-2 px-4 py-2 rounded bg-purple-600 hover:bg-purple-700 text-white text-sm"
-          disabled={isProcessing}
-        >
-          <Play size={16} />
-          <span>Test Audio</span>
+          {isRecording ? <MicOff size={28} /> : <Mic size={28} />}
         </button>
 
         <button
           onClick={testSimpleAudio}
-          className="flex items-center space-x-2 px-3 py-2 rounded bg-green-600 hover:bg-green-700 text-white text-xs"
+          className="w-10 h-10 flex items-center justify-center rounded-full bg-green-600 hover:bg-green-700 text-white transition"
           disabled={isProcessing}
+          title="Play test beep"
         >
-          <Volume2 size={14} />
-          <span>Test Beep</span>
+          <Volume2 size={18} />
         </button>
-      </div>
 
-      {/* Status */}
-      <div className="text-center text-sm text-zinc-400">
         {isProcessing && (
-          <div className="flex items-center justify-center space-x-2">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
-            <span>Processing your voice...</span>
+          <div className="ml-4 flex items-center space-x-2 text-sm text-zinc-400">
+            <div className="h-4 w-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+            <span>Processing...</span>
           </div>
         )}
-        {isPlaying && (
-          <div className="flex items-center justify-center space-x-2">
-            <Play size={16} className="text-green-400" />
-            <span className="text-green-400">Playing AI response...</span>
-          </div>
-        )}
-        {!isProcessing && !isPlaying && !isRecording && (
-          <div className="text-zinc-500">
-            Ready to chat • Click "Test Beep" to check audio • Hold mic to record
-          </div>
-        )}
-      </div>
-
-      {/* Q&A Pairs Display */}
-      <div className="space-y-3 max-h-64 overflow-y-auto">
-        {/* Previous completed Q&A pairs */}
-        {qaPairs.map(qa => (
-          <div key={qa.id} className="bg-zinc-900 rounded-lg p-4 border border-zinc-700">
-            <div className="mb-3">
-              <div className="flex items-center mb-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
-                <span className="text-sm font-medium text-blue-400">You asked:</span>
-              </div>
-              <div className="bg-zinc-800 rounded p-3 ml-4">
-                <p className="text-sm text-zinc-200">{qa.question}</p>
-              </div>
-            </div>
-            
-            <div>
-              <div className="flex items-center mb-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-                <span className="text-sm font-medium text-green-400">AI answered:</span>
-              </div>
-              <div className="bg-zinc-800 rounded p-3 ml-4">
-                <p className="text-sm text-zinc-200">{qa.answer}</p>
-              </div>
-            </div>
-            
-            <div className="text-xs text-zinc-500 mt-2 text-right">
-              {qa.timestamp.toLocaleTimeString()}
-            </div>
-          </div>
-        ))}
-
-        {/* Current ongoing Q&A */}
-        {currentQA && (
-          <div className="bg-zinc-900 rounded-lg p-4 border border-zinc-600 border-dashed">
-            <div className="mb-3">
-              <div className="flex items-center mb-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
-                <span className="text-sm font-medium text-blue-400">You asked:</span>
-              </div>
-              <div className="bg-zinc-800 rounded p-3 ml-4">
-                <p className="text-sm text-zinc-200">{currentQA.question}</p>
-              </div>
-            </div>
-            
-            <div>
-              <div className="flex items-center mb-2">
-                <div className="w-2 h-2 bg-orange-500 rounded-full mr-2 animate-pulse"></div>
-                <span className="text-sm font-medium text-orange-400">AI is responding:</span>
-              </div>
-              <div className="bg-zinc-800 rounded p-3 ml-4">
-                <p className="text-sm text-zinc-200">
-                  {currentQA.answer}
-                  <span className="animate-pulse">|</span>
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Empty state */}
-        {qaPairs.length === 0 && !currentQA && (
-          <div className="bg-zinc-900 rounded-lg p-6 text-center border border-zinc-700 border-dashed">
-            <div className="text-zinc-500 mb-2">
-              <Mic size={24} className="mx-auto mb-2 opacity-50" />
-            </div>
-            <p className="text-sm text-zinc-400">No conversations yet</p>
-            <p className="text-xs text-zinc-500 mt-1">Hold the microphone button to start chatting</p>
-          </div>
-        )}
-      </div>
-
-      <div className="text-xs text-zinc-500">
-        <p>• Select language and voice before speaking</p>
-        <p>• Hold the microphone button to record</p>
-        <p>• AI will respond with voice automatically</p>
-        <p>• Use mute button to disable audio responses</p>
       </div>
     </div>
   );
