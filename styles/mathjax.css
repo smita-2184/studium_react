@@ -1,0 +1,101 @@
+/* MathJax styling for better equation display */
+.math-container {
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+}
+
+.math-display {
+  font-size: 1.2em !important;
+  line-height: 1.6 !important;
+}
+
+/* MathJax SVG styling */
+.MathJax {
+  color: #000000 !important;
+  font-size: 1.2em !important;
+}
+
+.MathJax_Display {
+  text-align: center !important;
+  margin: 1em 0 !important;
+}
+
+/* Ensure MathJax SVG elements are properly sized */
+.MathJax svg {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+/* Custom styling for equation containers */
+.equation-container {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 10px 0;
+  text-align: center;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.equation-container .MathJax {
+  font-size: 1.4em !important;
+}
+
+/* Fallback styling for when MathJax fails */
+.math-fallback {
+  font-family: 'Times New Roman', 'Computer Modern', serif;
+  font-size: 1.4em;
+  text-align: center;
+  color: #000;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #dee2e6;
+  line-height: 1.6;
+  font-style: italic;
+  white-space: pre-wrap;
+}
+
+/* Simple math renderer styles */
+.simple-math-container {
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  width: 100%;
+}
+
+.simple-math-display {
+  font-family: 'Times New Roman', 'Computer Modern', serif;
+  font-size: 1.6em;
+  text-align: center;
+  color: #000;
+  line-height: 1.8;
+  padding: 15px;
+}
+
+.fraction {
+  display: inline-block;
+  text-align: center;
+  vertical-align: middle;
+  margin: 0 5px;
+}
+
+.numerator {
+  display: block;
+  border-bottom: 1px solid #000;
+  padding-bottom: 2px;
+  margin-bottom: 2px;
+}
+
+.denominator {
+  display: block;
+  padding-top: 2px;
+} 
