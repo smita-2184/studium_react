@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from 'react';
+import { CanvasHints } from './CanvasHints';
 
 interface CanvasOverlayProps {
   width: number;
@@ -15,7 +16,9 @@ export const CanvasOverlay: React.FC<CanvasOverlayProps> = ({ width, height, onT
   const [konvaComponents, setKonvaComponents] = useState<any>(null);
   const [currentColor, setCurrentColor] = useState('#ef4444');
   const [brushSize, setBrushSize] = useState(3);
-  const isDrawing = useRef(false);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [canvasImage, setCanvasImage] = useState<string | null>(null);
+  const isDrawingRef = useRef(false);
   const stageRef = useRef<any>(null);
 
   useEffect(() => {
@@ -38,8 +41,25 @@ export const CanvasOverlay: React.FC<CanvasOverlayProps> = ({ width, height, onT
     loadKonva();
   }, []);
 
+  const updateCanvasImage = () => {
+    if (stageRef.current) {
+      try {
+        const dataURL = stageRef.current.toDataURL({
+          mimeType: 'image/jpeg',
+          quality: 0.8,
+          pixelRatio: 1
+        });
+        const base64Data = dataURL.split(',')[1];
+        setCanvasImage(base64Data);
+      } catch (error) {
+        console.error('Error capturing canvas:', error);
+      }
+    }
+  };
+
   const handleMouseDown = (e: any) => {
-    isDrawing.current = true;
+    isDrawingRef.current = true;
+    setIsDrawing(true);
     const pos = e.target.getStage().getPointerPosition();
     setLines([...lines, { 
       points: [pos.x, pos.y], 
@@ -50,7 +70,7 @@ export const CanvasOverlay: React.FC<CanvasOverlayProps> = ({ width, height, onT
   };
 
   const handleMouseMove = (e: any) => {
-    if (!isDrawing.current) {
+    if (!isDrawingRef.current) {
       return;
     }
     const stage = e.target.getStage();
@@ -64,16 +84,22 @@ export const CanvasOverlay: React.FC<CanvasOverlayProps> = ({ width, height, onT
       }
       return newLines;
     });
+
+    // Update canvas image for hints
+    updateCanvasImage();
   };
 
   const handleMouseUp = () => {
-    isDrawing.current = false;
+    isDrawingRef.current = false;
+    setIsDrawing(false);
+    updateCanvasImage();
   };
 
   // Separate touch handlers for mobile stability
   const handleTouchStart = (e: any) => {
     e.evt.preventDefault(); // Prevent scrolling
-    isDrawing.current = true;
+    isDrawingRef.current = true;
+    setIsDrawing(true);
     const pos = e.target.getStage().getPointerPosition();
     setLines([...lines, { 
       points: [pos.x, pos.y], 
@@ -85,7 +111,7 @@ export const CanvasOverlay: React.FC<CanvasOverlayProps> = ({ width, height, onT
 
   const handleTouchMove = (e: any) => {
     e.evt.preventDefault(); // Prevent scrolling
-    if (!isDrawing.current) {
+    if (!isDrawingRef.current) {
       return;
     }
     const stage = e.target.getStage();
@@ -99,15 +125,21 @@ export const CanvasOverlay: React.FC<CanvasOverlayProps> = ({ width, height, onT
       }
       return newLines;
     });
+
+    // Update canvas image for hints
+    updateCanvasImage();
   };
 
   const handleTouchEnd = (e: any) => {
     e.evt.preventDefault(); // Prevent scrolling
-    isDrawing.current = false;
+    isDrawingRef.current = false;
+    setIsDrawing(false);
+    updateCanvasImage();
   };
 
   const clearCanvas = () => {
     setLines([]);
+    setCanvasImage(null);
   };
 
   const transferToChat = () => {
@@ -164,105 +196,112 @@ export const CanvasOverlay: React.FC<CanvasOverlayProps> = ({ width, height, onT
   const { Stage, Layer, Line } = konvaComponents;
 
   return (
-    <div 
-      className="absolute top-0 left-0" 
-      style={{ 
-        touchAction: 'none',
-        userSelect: 'none',
-        WebkitUserSelect: 'none',
-        WebkitTouchCallout: 'none'
-      }}
-    >
-      {/* Canvas Controls */}
-      <div className="absolute top-4 right-4 z-10 flex flex-col space-y-2">
-        <div className="flex flex-col space-y-2">
-          <div className="flex space-x-2">
-            <button
-              onClick={transferToChat}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
-              disabled={lines.length === 0}
-            >
-              Transfer to Chat
-            </button>
-            <button
-              onClick={transferEquation}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm"
-              disabled={lines.length === 0}
-            >
-              Transfer Equation
-            </button>
-          </div>
-          <div className="flex space-x-2">
-            <button
-              onClick={clearCanvas}
-              className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm"
-            >
-              Clear
-            </button>
-            <div className="bg-zinc-800 text-white px-3 py-1 rounded text-sm">
-              Lines: {lines.length}
-            </div>
-          </div>
-        </div>
-        
-        {/* Color Picker */}
-        <div className="flex space-x-1">
-          {['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#000000'].map(color => (
-            <button
-              key={color}
-              onClick={() => setCurrentColor(color)}
-              className={`w-6 h-6 rounded border-2 ${currentColor === color ? 'border-white' : 'border-gray-400'}`}
-              style={{ backgroundColor: color }}
-            />
-          ))}
-        </div>
-        
-        {/* Brush Size */}
-        <div className="flex items-center space-x-2 bg-zinc-800 px-3 py-1 rounded">
-          <span className="text-white text-xs">Size:</span>
-          <input
-            type="range"
-            min="1"
-            max="20"
-            value={brushSize}
-            onChange={(e) => setBrushSize(Number(e.target.value))}
-            className="w-16"
-          />
-          <span className="text-white text-xs">{brushSize}px</span>
-        </div>
-      </div>
-
-      {/* Konva Stage */}
-      <Stage
-        ref={stageRef}
-        width={width}
-        height={height}
-        onMouseDown={handleMouseDown}
-        onMousemove={handleMouseMove}
-        onMouseup={handleMouseUp}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
+    <div className="flex h-full">
+      <div 
+        className="relative flex-1" 
         style={{ 
-          cursor: 'crosshair',
-          touchAction: 'none' // Prevent touch scrolling/zooming
+          touchAction: 'none',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          WebkitTouchCallout: 'none'
         }}
       >
-        <Layer>
-          {lines.map((line, i) => (
-            <Line
-              key={line.id || i}
-              points={line.points}
-              stroke={line.color || "#ef4444"}
-              strokeWidth={line.strokeWidth || 3}
-              tension={0.5}
-              lineCap="round"
-              lineJoin="round"
-              globalCompositeOperation="source-over"
+        {/* Canvas Controls */}
+        <div className="absolute top-4 right-4 z-10 flex flex-col space-y-2">
+          <div className="flex flex-col space-y-2">
+            <div className="flex space-x-2">
+              <button
+                onClick={transferToChat}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
+                disabled={lines.length === 0}
+              >
+                Transfer to Chat
+              </button>
+              <button
+                onClick={transferEquation}
+                className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm"
+                disabled={lines.length === 0}
+              >
+                Transfer Equation
+              </button>
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={clearCanvas}
+                className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm"
+              >
+                Clear
+              </button>
+              <div className="bg-zinc-800 text-white px-3 py-1 rounded text-sm">
+                Lines: {lines.length}
+              </div>
+            </div>
+          </div>
+          
+          {/* Color Picker */}
+          <div className="flex space-x-1">
+            {['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#000000'].map(color => (
+              <button
+                key={color}
+                onClick={() => setCurrentColor(color)}
+                className={`w-6 h-6 rounded border-2 ${currentColor === color ? 'border-white' : 'border-gray-400'}`}
+                style={{ backgroundColor: color }}
+              />
+            ))}
+          </div>
+          
+          {/* Brush Size */}
+          <div className="flex items-center space-x-2">
+            <span className="text-white text-xs">Size:</span>
+            <input
+              type="range"
+              min="1"
+              max="20"
+              value={brushSize}
+              onChange={(e) => setBrushSize(Number(e.target.value))}
+              className="w-16"
             />
-          ))}
-        </Layer>
-      </Stage>
+            <span className="text-white text-xs">{brushSize}px</span>
+          </div>
+        </div>
+
+        {/* Konva Stage */}
+        <Stage
+          ref={stageRef}
+          width={width}
+          height={height}
+          onMouseDown={handleMouseDown}
+          onMousemove={handleMouseMove}
+          onMouseup={handleMouseUp}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          style={{ 
+            cursor: 'crosshair',
+            touchAction: 'none' // Prevent touch scrolling/zooming
+          }}
+        >
+          <Layer>
+            {lines.map((line, i) => (
+              <Line
+                key={line.id || i}
+                points={line.points}
+                stroke={line.color || "#ef4444"}
+                strokeWidth={line.strokeWidth || 3}
+                tension={0.5}
+                lineCap="round"
+                lineJoin="round"
+                globalCompositeOperation="source-over"
+              />
+            ))}
+          </Layer>
+        </Stage>
+      </div>
+
+      {/* Hints Sidebar */}
+      <div className="w-80 border-l border-zinc-800">
+        <CanvasHints canvasImage={canvasImage} isActive={isDrawing} />
+      </div>
     </div>
   );
 }; 
