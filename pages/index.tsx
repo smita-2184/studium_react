@@ -9,6 +9,7 @@ import { SimpleLatexRenderer } from '../components/SimpleLatexRenderer';
 import { GeoGebraGraph } from '../components/GeoGebraGraph';
 import { SimpleGeoGebraGraph } from '../components/SimpleGeoGebraGraph';
 import { EmbeddedGeoGebra } from '../components/EmbeddedGeoGebra';
+import { VoiceChat } from '../components/VoiceChat';
 import { useWindowDimensions } from '../hooks/useWindowDimensions';
 import dynamic from 'next/dynamic';
 
@@ -63,7 +64,7 @@ const Home = () => {
   const [authError, setAuthError] = useState<string>('');
   const [selectedPdf, setSelectedPdf] = useState<File | null>(null);
   const [showCanvas, setShowCanvas] = useState(false);
-  const [activeTab, setActiveTab] = useState<'chat' | 'flashcards' | 'quizzes' | 'summary' | 'equations' | 'graphs'>('chat');
+  const [activeTab, setActiveTab] = useState<'chat' | 'voice' | 'flashcards' | 'quizzes' | 'summary' | 'equations' | 'graphs'>('chat');
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
   const [extractedEquations, setExtractedEquations] = useState<string[]>([]);
@@ -684,6 +685,13 @@ const Home = () => {
               </Button>
               <Button 
                 variant="ghost" 
+                className={`h-9 px-3 ${activeTab === 'voice' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800'}`}
+                onClick={() => setActiveTab('voice')}
+              >
+                <Mic className="w-4 h-4 mr-2" /> Voice
+              </Button>
+              <Button 
+                variant="ghost" 
                 className={`h-9 px-3 ${activeTab === 'flashcards' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800'}`}
                 onClick={() => setActiveTab('flashcards')}
               >
@@ -722,6 +730,15 @@ const Home = () => {
             <div className="flex-1 flex flex-col">
               {activeTab === 'chat' && user ? (
                 <Chat userId={user.uid} />
+              ) : activeTab === 'voice' ? (
+                <div className="flex-1 flex flex-col p-4">
+                  <VoiceChat 
+                    onTranscriptUpdate={(transcript, isUser) => {
+                      // Optionally sync voice transcripts with chat
+                      console.log(`${isUser ? 'User' : 'AI'}: ${transcript}`);
+                    }}
+                  />
+                </div>
               ) : activeTab === 'flashcards' ? (
                 <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-4 text-zinc-400">
                   <Copy className="w-16 h-16 text-zinc-500" />
