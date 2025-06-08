@@ -25,13 +25,19 @@ export const GeoGebraGraph: React.FC<GeoGebraGraphProps> = ({
   useEffect(() => {
     // Load GeoGebra script if not already loaded
     if (!window.GGBApplet) {
+      console.log('Loading GeoGebra script...');
       const script = document.createElement('script');
       script.src = 'https://www.geogebra.org/apps/deployggb.js';
       script.onload = () => {
-        initializeGeoGebra();
+        console.log('GeoGebra script loaded successfully');
+        setTimeout(initializeGeoGebra, 100); // Small delay to ensure script is ready
+      };
+      script.onerror = () => {
+        console.error('Failed to load GeoGebra script');
       };
       document.head.appendChild(script);
     } else {
+      console.log('GeoGebra already loaded, initializing...');
       initializeGeoGebra();
     }
   }, []);
@@ -55,9 +61,18 @@ export const GeoGebraGraph: React.FC<GeoGebraGraphProps> = ({
   }, [equation]);
 
   const initializeGeoGebra = () => {
+    console.log('Initializing GeoGebra...', { 
+      hasRef: !!geogebraRef.current, 
+      hasGGBApplet: !!window.GGBApplet,
+      equation 
+    });
+    
     if (geogebraRef.current && window.GGBApplet) {
       // Clear any existing content
       geogebraRef.current.innerHTML = '';
+      
+      // Add a loading indicator
+      geogebraRef.current.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; background: #f0f0f0; border-radius: 8px;"><div>Loading GeoGebra...</div></div>';
       
       const parameters = {
         "appName": "graphing",
@@ -82,6 +97,7 @@ export const GeoGebraGraph: React.FC<GeoGebraGraphProps> = ({
         "allowUpscale": false,
         "clickToLoad": false,
         "appletOnLoad": function(api: any) {
+          console.log('GeoGebra applet loaded successfully', api);
           appletRef.current = api;
           
           // Set up the coordinate system
@@ -90,6 +106,7 @@ export const GeoGebraGraph: React.FC<GeoGebraGraphProps> = ({
           // Add initial equation if provided
           if (equation) {
             try {
+              console.log('Setting initial equation:', equation);
               api.evalCommand(`f(x) = ${equation}`);
             } catch (error) {
               console.error('Error setting initial equation:', error);
@@ -98,8 +115,21 @@ export const GeoGebraGraph: React.FC<GeoGebraGraphProps> = ({
         }
       };
 
-      const applet = new window.GGBApplet(parameters, true);
-      applet.inject(geogebraRef.current);
+      try {
+        console.log('Creating GeoGebra applet with parameters:', parameters);
+        const applet = new window.GGBApplet(parameters, true);
+        applet.inject(geogebraRef.current);
+      } catch (error) {
+        console.error('Error creating GeoGebra applet:', error);
+        if (geogebraRef.current) {
+          geogebraRef.current.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; background: #fee; border-radius: 8px; color: red;"><div>Error loading GeoGebra</div></div>';
+        }
+      }
+    } else {
+      console.error('Cannot initialize GeoGebra:', {
+        hasRef: !!geogebraRef.current,
+        hasGGBApplet: !!window.GGBApplet
+      });
     }
   };
 

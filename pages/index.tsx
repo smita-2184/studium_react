@@ -7,6 +7,7 @@ import { PdfUploader } from '../components/PdfUploader';
 import { LaTeXRenderer } from '../components/LaTeXRenderer';
 import { SimpleLatexRenderer } from '../components/SimpleLatexRenderer';
 import { GeoGebraGraph } from '../components/GeoGebraGraph';
+import { SimpleGeoGebraGraph } from '../components/SimpleGeoGebraGraph';
 import { useWindowDimensions } from '../hooks/useWindowDimensions';
 import dynamic from 'next/dynamic';
 
@@ -867,7 +868,7 @@ const Home = () => {
                           
                           {/* GeoGebra Graph */}
                           <div className="bg-white rounded-lg p-2">
-                            <GeoGebraGraph 
+                            <SimpleGeoGebraGraph 
                               equation={graph.geogebraEquation}
                               width={350}
                               height={300}
