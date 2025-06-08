@@ -8,6 +8,7 @@ import { LaTeXRenderer } from '../components/LaTeXRenderer';
 import { SimpleLatexRenderer } from '../components/SimpleLatexRenderer';
 import { GeoGebraGraph } from '../components/GeoGebraGraph';
 import { SimpleGeoGebraGraph } from '../components/SimpleGeoGebraGraph';
+import { EmbeddedGeoGebra } from '../components/EmbeddedGeoGebra';
 import { useWindowDimensions } from '../hooks/useWindowDimensions';
 import dynamic from 'next/dynamic';
 
@@ -760,38 +761,27 @@ const Home = () => {
                         <div key={index} className="bg-zinc-800 rounded-lg p-4 border border-zinc-700">
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-xs text-zinc-500">Equation {index + 1}</span>
-                            <div className="flex space-x-1">
-                              <Button
-                                onClick={() => handleConvertToGraph(equation)}
-                                variant="ghost"
-                                size="sm"
-                                className="text-blue-400 hover:text-blue-200 h-6 w-6 p-0"
-                                title="Convert to Graph"
-                              >
-                                <BarChart3 className="w-3 h-3" />
-                              </Button>
-                              <Button
-                                onClick={() => {
-                                  navigator.clipboard.writeText(equation);
-                                  // Show copy notification
-                                  const notification = document.createElement('div');
-                                  notification.className = 'fixed top-4 right-4 bg-green-600 text-white px-3 py-1 rounded text-sm z-50';
-                                  notification.textContent = '📋 Copied!';
-                                  document.body.appendChild(notification);
-                                  setTimeout(() => {
-                                    if (document.body.contains(notification)) {
-                                      document.body.removeChild(notification);
-                                    }
-                                  }, 2000);
-                                }}
-                                variant="ghost"
-                                size="sm"
-                                className="text-zinc-400 hover:text-zinc-200 h-6 w-6 p-0"
-                                title="Copy LaTeX"
-                              >
-                                <Copy className="w-3 h-3" />
-                              </Button>
-                            </div>
+                            <Button
+                              onClick={() => {
+                                navigator.clipboard.writeText(equation);
+                                // Show copy notification
+                                const notification = document.createElement('div');
+                                notification.className = 'fixed top-4 right-4 bg-green-600 text-white px-3 py-1 rounded text-sm z-50';
+                                notification.textContent = '📋 Copied! Paste in GeoGebra';
+                                document.body.appendChild(notification);
+                                setTimeout(() => {
+                                  if (document.body.contains(notification)) {
+                                    document.body.removeChild(notification);
+                                  }
+                                }, 3000);
+                              }}
+                              variant="ghost"
+                              size="sm"
+                              className="text-zinc-400 hover:text-zinc-200 h-6 w-6 p-0"
+                              title="Copy to use in GeoGebra"
+                            >
+                              <Copy className="w-3 h-3" />
+                            </Button>
                           </div>
                           
                           {/* LaTeX Rendered Equation */}
@@ -826,76 +816,30 @@ const Home = () => {
                 </div>
               ) : activeTab === 'graphs' ? (
                 <div className="flex-1 flex flex-col p-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-zinc-300">Mathematical Graphs</h3>
-                    <Button 
-                      onClick={() => setGeogebraGraphs([])}
-                      variant="outline"
-                      size="sm"
-                      className="border-zinc-600 text-zinc-400 hover:bg-zinc-700"
-                      disabled={geogebraGraphs.length === 0}
-                    >
-                      Clear All
-                    </Button>
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold text-zinc-300 mb-2">GeoGebra Calculator</h3>
+                    <p className="text-sm text-zinc-400">Interactive mathematical graphing and calculation tool</p>
                   </div>
                   
-                  {geogebraGraphs.length > 0 ? (
-                    <div className="space-y-6 flex-1 overflow-y-auto">
-                      {geogebraGraphs.map((graph, index) => (
-                        <div key={index} className="bg-zinc-800 rounded-lg p-4 border border-zinc-700">
-                          <div className="flex items-center justify-between mb-3">
-                            <span className="text-sm text-zinc-400">Graph {index + 1}</span>
-                            <Button
-                              onClick={() => {
-                                setGeogebraGraphs(prev => prev.filter((_, i) => i !== index));
-                              }}
-                              variant="ghost"
-                              size="sm"
-                              className="text-red-400 hover:text-red-200 h-6 w-6 p-0"
-                              title="Remove Graph"
-                            >
-                              ×
-                            </Button>
+                  <div className="flex-1 overflow-hidden">
+                    <EmbeddedGeoGebra 
+                      width={380}
+                      height={500}
+                    />
+                  </div>
+                  
+                  {extractedEquations.length > 0 && (
+                    <div className="mt-4 p-3 bg-zinc-800 rounded-lg border border-zinc-700">
+                      <div className="text-sm font-medium text-zinc-300 mb-2">Your Extracted Equations:</div>
+                      <div className="space-y-1">
+                        {extractedEquations.map((equation, index) => (
+                          <div key={index} className="text-xs font-mono text-zinc-400 bg-zinc-900 rounded px-2 py-1">
+                            {equation}
                           </div>
-                          
-                          {/* Original LaTeX Equation */}
-                          <div className="mb-3">
-                            <div className="text-xs text-zinc-500 mb-1">Original Equation:</div>
-                            <div className="bg-zinc-900 rounded p-2 text-xs font-mono text-zinc-300">
-                              {graph.equation}
-                            </div>
-                          </div>
-                          
-                          {/* GeoGebra Graph */}
-                          <div className="bg-white rounded-lg p-2">
-                            <SimpleGeoGebraGraph 
-                              equation={graph.geogebraEquation}
-                              width={350}
-                              height={300}
-                            />
-                          </div>
-                          
-                          {/* GeoGebra Equation */}
-                          <div className="mt-3">
-                            <div className="text-xs text-zinc-500 mb-1">GeoGebra Format:</div>
-                            <div className="bg-zinc-900 rounded p-2 text-xs font-mono text-zinc-300">
-                              f(x) = {graph.geogebraEquation}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center space-y-4 text-zinc-400">
-                      <BarChart3 className="w-16 h-16 text-zinc-500" />
-                      <p className="text-lg font-medium text-zinc-300">No Graphs Yet</p>
-                      <p className="text-center text-sm">Extract equations first, then click the graph icon to create interactive graphs.</p>
-                      <div className="text-xs text-zinc-500 text-center">
-                        <p>Supported equation types:</p>
-                        <p>• Functions (y = x², sin(x), etc.)</p>
-                        <p>• Derivatives and integrals</p>
-                        <p>• Polynomial equations</p>
-                        <p>• Trigonometric functions</p>
+                        ))}
+                      </div>
+                      <div className="text-xs text-zinc-500 mt-2">
+                        💡 Copy these equations and paste them into the GeoGebra calculator above
                       </div>
                     </div>
                   )}
