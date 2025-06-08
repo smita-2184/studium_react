@@ -70,6 +70,42 @@ export const CanvasOverlay: React.FC<CanvasOverlayProps> = ({ width, height, onT
     isDrawing.current = false;
   };
 
+  // Separate touch handlers for mobile stability
+  const handleTouchStart = (e: any) => {
+    e.evt.preventDefault(); // Prevent scrolling
+    isDrawing.current = true;
+    const pos = e.target.getStage().getPointerPosition();
+    setLines([...lines, { 
+      points: [pos.x, pos.y], 
+      id: Date.now(),
+      color: currentColor,
+      strokeWidth: brushSize
+    }]);
+  };
+
+  const handleTouchMove = (e: any) => {
+    e.evt.preventDefault(); // Prevent scrolling
+    if (!isDrawing.current) {
+      return;
+    }
+    const stage = e.target.getStage();
+    const point = stage.getPointerPosition();
+    
+    setLines(prevLines => {
+      const newLines = [...prevLines];
+      const lastLine = newLines[newLines.length - 1];
+      if (lastLine) {
+        lastLine.points = lastLine.points.concat([point.x, point.y]);
+      }
+      return newLines;
+    });
+  };
+
+  const handleTouchEnd = (e: any) => {
+    e.evt.preventDefault(); // Prevent scrolling
+    isDrawing.current = false;
+  };
+
   const clearCanvas = () => {
     setLines([]);
   };
@@ -128,7 +164,15 @@ export const CanvasOverlay: React.FC<CanvasOverlayProps> = ({ width, height, onT
   const { Stage, Layer, Line } = konvaComponents;
 
   return (
-    <div className="absolute top-0 left-0">
+    <div 
+      className="absolute top-0 left-0" 
+      style={{ 
+        touchAction: 'none',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        WebkitTouchCallout: 'none'
+      }}
+    >
       {/* Canvas Controls */}
       <div className="absolute top-4 right-4 z-10 flex flex-col space-y-2">
         <div className="flex flex-col space-y-2">
@@ -196,10 +240,13 @@ export const CanvasOverlay: React.FC<CanvasOverlayProps> = ({ width, height, onT
         onMouseDown={handleMouseDown}
         onMousemove={handleMouseMove}
         onMouseup={handleMouseUp}
-        onTouchStart={handleMouseDown}
-        onTouchMove={handleMouseMove}
-        onTouchEnd={handleMouseUp}
-        style={{ cursor: 'crosshair' }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        style={{ 
+          cursor: 'crosshair',
+          touchAction: 'none' // Prevent touch scrolling/zooming
+        }}
       >
         <Layer>
           {lines.map((line, i) => (
